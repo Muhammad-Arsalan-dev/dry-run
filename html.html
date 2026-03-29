@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assembly Lab 6 — Stack & Procedures</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0d0f14; --bg2:#131720; --bg3:#1a2030; --panel:#161c28;
+  --border:rgba(99,130,255,0.14); --border2:rgba(99,130,255,0.3);
+  --accent:#6382ff; --accent2:#a78bfa; --green:#34d399; --amber:#fbbf24;
+  --red:#f87171; --teal:#2dd4bf; --text:#e2e8f0; --text2:#94a3b8; --text3:#4a5568;
+  --mono:'JetBrains Mono',monospace; --sans:'Inter',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:var(--sans)}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(99,130,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(99,130,255,.025) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+
+/* ── Full-page shell ── */
+.shell{position:relative;z-index:1;height:100vh;display:flex;flex-direction:column;padding:10px 12px 8px}
+
+/* ── Top bar ── */
+.topbar{display:flex;align-items:center;gap:10px;padding:0 2px 8px;border-bottom:1px solid var(--border);flex-shrink:0}
+.logo{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.title-group h1{font-size:14px;font-weight:600;letter-spacing:-.2px}
+.title-group p{font-size:11px;color:var(--text2);margin-top:1px}
+.badge{margin-left:auto;background:rgba(99,130,255,.12);border:1px solid rgba(99,130,255,.25);color:var(--accent);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500;white-space:nowrap}
+.kbd-hint{font-size:10px;color:var(--text3);font-family:var(--mono);white-space:nowrap}
+
+/* ── Proc tabs row ── */
+.tabs-row{display:flex;gap:6px;padding:6px 0;flex-shrink:0;overflow-x:auto}
+.tabs-row::-webkit-scrollbar{height:3px}.tabs-row::-webkit-scrollbar-thumb{background:var(--border2)}
+.tab{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:7px;border:1px solid var(--border);background:var(--panel);cursor:pointer;font-size:11px;font-weight:600;color:var(--text2);transition:all .18s;white-space:nowrap;flex-shrink:0}
+.tab:hover{border-color:var(--border2);color:var(--text)}
+.tab.on{background:linear-gradient(135deg,rgba(99,130,255,.22),rgba(167,139,250,.16));border-color:var(--accent);color:#fff}
+.tab .n{width:18px;height:18px;background:rgba(99,130,255,.15);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700}
+.tab.on .n{background:var(--accent)}
+
+/* ── Main 3-col grid (fills remaining height) ── */
+.grid{display:grid;grid-template-columns:1fr 280px 240px;gap:8px;flex:1;min-height:0}
+
+/* ── Panels ── */
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:11px;display:flex;flex-direction:column;min-height:0;overflow:hidden}
+.ph{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02);flex-shrink:0}
+.dot{width:7px;height:7px;border-radius:50%}
+.dot.g{background:var(--green)} .dot.a{background:var(--amber)} .dot.r{background:var(--red)}
+.pt{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.08em;text-transform:uppercase}
+.pscroll{flex:1;overflow-y:auto;min-height:0}
+.pscroll::-webkit-scrollbar{width:4px}.pscroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* ── Code lines ── */
+.code-lines{display:flex;flex-direction:column;gap:1px;padding:8px}
+.section-label{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:5px 10px 3px;border-bottom:1px solid var(--border);margin:4px 0 3px;color:var(--text3)}
+.cl{display:flex;align-items:stretch;border-radius:5px;overflow:hidden;transition:all .2s;cursor:default}
+.ln{font-family:var(--mono);font-size:11px;color:var(--text3);width:28px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.02);border-right:1px solid var(--border)}
+.lb{font-family:var(--mono);font-size:12px;color:var(--text2);padding:5px 10px;flex:1;display:flex;align-items:center;gap:6px}
+.cl.indent1 .lb{padding-left:24px} .cl.indent2 .lb{padding-left:40px}
+.cl.done .ln{color:#232d40}.cl.done .lb{color:var(--text3)}
+.cl.cur{background:rgba(99,130,255,.1);border:1px solid rgba(99,130,255,.35)}
+.cl.cur .ln{background:var(--accent);color:#fff;font-weight:700}
+.cl.cur .lb{color:#fff}
+.arrow{color:var(--accent);font-size:12px;animation:pulse 1s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.kw{color:var(--accent2);font-weight:700}.reg-hl{color:var(--amber)}.num-hl{color:var(--teal)}.comment{color:#3d5070;font-style:italic}.str-hl{color:var(--green)}.op-hl{color:var(--red)}
+
+/* ── Concept pills ── */
+.pills{display:flex;gap:5px;flex-wrap:wrap;padding:6px 10px;border-top:1px solid var(--border);flex-shrink:0}
+.cpill{font-size:10px;font-family:var(--mono);padding:3px 8px;border-radius:5px;border:1px solid var(--border)}
+.cpill.call{border-color:rgba(251,191,36,.3);color:var(--amber);background:rgba(251,191,36,.05)}
+.cpill.ret{border-color:rgba(248,113,113,.3);color:var(--red);background:rgba(248,113,113,.05)}
+.cpill.push{border-color:rgba(99,130,255,.3);color:var(--accent);background:rgba(99,130,255,.05)}
+.cpill.pop{border-color:rgba(45,212,191,.3);color:var(--teal);background:rgba(45,212,191,.05)}
+.cpill.add{border-color:rgba(52,211,153,.3);color:var(--green);background:rgba(52,211,153,.05)}
+.cpill.mov{border-color:rgba(167,139,250,.3);color:var(--accent2);background:rgba(167,139,250,.05)}
+
+/* ── Middle col: explain + terminal + nav ── */
+.mid-col{display:flex;flex-direction:column;gap:6px;min-height:0}
+
+/* Explain card */
+.explain{background:var(--panel);border:1px solid var(--border);border-radius:11px;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden}
+.ex-head{display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--border);background:rgba(255,255,255,.02);flex-shrink:0}
+.step-badge{background:var(--accent);color:#fff;font-family:var(--mono);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px}
+.ex-body{padding:10px 12px;overflow-y:auto;flex:1}
+.ex-body::-webkit-scrollbar{width:3px}.ex-body::-webkit-scrollbar-thumb{background:var(--border2)}
+.ex-main{font-size:12.5px;line-height:1.7;color:var(--text)}
+.ex-main .hl{color:var(--accent2);font-weight:600;font-family:var(--mono);font-size:11.5px;background:rgba(167,139,250,.1);padding:1px 5px;border-radius:3px}
+.ex-main .wn{color:var(--amber);font-weight:600;font-family:var(--mono);font-size:11.5px;background:rgba(251,191,36,.1);padding:1px 5px;border-radius:3px}
+.ex-main .ok{color:var(--green);font-weight:600}
+.ex-main .danger{color:var(--red);font-weight:600}
+.mem-row{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.mpill{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:7px;padding:4px 8px;font-size:11px}
+.mpill .arr{color:var(--accent);font-size:12px}
+.mpill .bef{color:var(--text3);text-decoration:line-through;font-family:var(--mono)}
+.mpill .aft{color:var(--green);font-family:var(--mono);font-weight:600}
+.mpill .lbl{color:var(--text2)}
+.ex-detail{margin-top:8px;padding:8px 10px;background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:7px;font-size:11px;color:var(--text2);line-height:1.65;display:none}
+.ex-detail.show{display:block}
+
+/* Terminal */
+.term{background:#0a0c10;border:1px solid rgba(52,211,153,.18);border-radius:9px;flex-shrink:0;overflow:hidden}
+.term-bar{display:flex;align-items:center;gap:5px;padding:5px 10px;background:rgba(52,211,153,.04);border-bottom:1px solid rgba(52,211,153,.09)}
+.term-bar span{font-family:var(--mono);font-size:10px;color:rgba(52,211,153,.45)}
+.term-body{padding:7px 10px;min-height:34px;max-height:60px;overflow-y:auto}
+.term-line{font-family:var(--mono);font-size:11.5px;color:var(--green);line-height:1.6;animation:fi .25s ease}
+@keyframes fi{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.term-prompt{color:var(--text3);margin-right:5px}
+.term-empty{font-family:var(--mono);font-size:11px;color:var(--text3);font-style:italic}
+
+/* Nav bar */
+.nav{display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--panel);border:1px solid var(--border);border-radius:10px;flex-shrink:0}
+.nbtn{display:flex;align-items:center;gap:4px;padding:6px 14px;border-radius:7px;border:1px solid var(--border);background:rgba(255,255,255,.04);cursor:pointer;font-size:12px;font-weight:600;color:var(--text);transition:all .15s;font-family:var(--sans)}
+.nbtn:hover:not(:disabled){background:rgba(255,255,255,.08);border-color:var(--border2)}
+.nbtn:disabled{opacity:.25;cursor:default}
+.nbtn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent;color:#fff}
+.nbtn.primary:hover:not(:disabled){opacity:.9}
+.prog{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.pdots{display:flex;gap:4px;flex-wrap:wrap;justify-content:center}
+.pdot{width:7px;height:7px;border-radius:50%;background:var(--bg3);border:1px solid var(--border);transition:all .18s;cursor:pointer}
+.pdot.done{background:rgba(99,130,255,.4);border-color:var(--accent)}
+.pdot.cur{background:var(--accent);border-color:var(--accent);transform:scale(1.3)}
+.plbl{font-family:var(--mono);font-size:10px;color:var(--text3)}
+.rst{display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:7px;border:1px solid var(--border);background:transparent;cursor:pointer;font-size:11px;color:var(--text2);transition:all .15s;font-family:var(--sans)}
+.rst:hover{color:var(--red);border-color:rgba(248,113,113,.3)}
+
+/* ── Right col: registers + stack ── */
+.right-col{display:flex;flex-direction:column;gap:6px;min-height:0}
+
+/* Registers */
+.regs{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px}
+.rc{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:9px;padding:9px;transition:all .22s;position:relative;overflow:hidden}
+.rc::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--border);transition:background .22s}
+.rc.changed::before{background:var(--green)}
+.rc.changed{border-color:rgba(52,211,153,.3);background:rgba(52,211,153,.05)}
+.rn{font-family:var(--mono);font-size:9px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px}
+.rv{font-family:var(--mono);font-size:19px;font-weight:700;color:var(--text);transition:color .22s}
+.rc.changed .rv{color:var(--green)}
+.rv.sp-v{font-size:12px}
+.rsub{font-size:10px;color:var(--text3);margin-top:2px}
+.sp-card{grid-column:span 2;background:rgba(99,130,255,.06);border-color:rgba(99,130,255,.22)}
+.sp-card .rn{color:var(--accent)}
+.sp-bar{height:3px;background:var(--border);border-radius:2px;margin-top:6px;overflow:hidden}
+.sp-fill{height:100%;background:var(--accent);border-radius:2px;transition:width .35s cubic-bezier(.4,0,.2,1)}
+
+/* Stack */
+.sarea{padding:8px;display:flex;flex-direction:column;gap:5px;flex:1;overflow-y:auto;min-height:0}
+.sarea::-webkit-scrollbar{width:3px}.sarea::-webkit-scrollbar-thumb{background:var(--border2)}
+.sp-ptr{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.sp-arr{font-family:var(--mono);font-size:11px;color:var(--accent);animation:pulse 1.2s infinite}
+.sp-txt{font-family:var(--mono);font-size:10px;color:var(--text2)}
+.sp-dep{margin-left:auto;background:rgba(99,130,255,.14);color:var(--accent);font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:9px}
+.se{border-radius:7px;padding:7px 10px;display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11px;animation:sd .25s cubic-bezier(.4,0,.2,1)}
+@keyframes sd{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+.se.addr{background:rgba(52,211,153,.08);border:1px solid rgba(52,211,153,.22);color:var(--green)}
+.se.reg-s{background:rgba(99,130,255,.08);border:1px solid rgba(99,130,255,.22);color:var(--accent2)}
+.se-icon{font-size:12px;flex-shrink:0}
+.se-txt{flex:1}
+.top-b{background:var(--accent);color:#fff;font-size:8px;font-weight:700;padding:2px 5px;border-radius:3px;letter-spacing:.04em}
+.s-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 0;gap:6px;opacity:.4}
+.s-empty .icon{font-size:24px}
+.s-empty .txt{font-size:11px;color:var(--text3);font-family:var(--mono)}
+.s-base{display:flex;align-items:center;gap:6px;margin-top:4px;padding-top:6px;border-top:2px dashed var(--border)}
+.s-base-txt{font-family:var(--mono);font-size:10px;color:var(--text3)}
+
+/* ── Glossary bottom bar ── */
+.glossary{display:flex;gap:6px;flex-shrink:0;padding-top:6px;border-top:1px solid var(--border);overflow-x:auto}
+.glossary::-webkit-scrollbar{height:3px}.glossary::-webkit-scrollbar-thumb{background:var(--border2)}
+.gc{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:7px 10px;flex-shrink:0;min-width:130px;max-width:150px}
+.gc-head{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.gc-icon{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px}
+.gc-lbl{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--text)}
+.gc-body{font-size:10px;color:var(--text2);line-height:1.5}
+
+/* Banner (compact inline) */
+.banner{display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--panel);border:1px solid var(--border);border-radius:8px;flex-shrink:0}
+.bi{width:26px;height:26px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.btitle{font-size:12px;font-weight:600}
+.bdesc{font-size:10px;color:var(--text2);margin-top:1px}
+.bfile{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--text3)}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="logo">⚙</div>
+    <div class="title-group">
+      <h1>Assembly Lab 6 — Stack &amp; Procedure Calls</h1>
+      <p>CS-231 · National University of Technology · Interactive Debugger</p>
+    </div>
+    <span class="kbd-hint">← → Space · R reset</span>
+    <div class="badge">EMU8086 · 16-bit</div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs-row" id="tabs"></div>
+
+  <!-- Banner -->
+  <div class="banner">
+    <div class="bi" id="bi"></div>
+    <div><div class="btitle" id="btitle"></div><div class="bdesc" id="bdesc"></div></div>
+    <div class="bfile" id="bfile"></div>
+  </div>
+
+  <!-- 3-col grid -->
+  <div class="grid">
+
+    <!-- LEFT: code -->
+    <div class="panel">
+      <div class="ph"><div class="dot r"></div><div class="dot a"></div><div class="dot g"></div>
+        <span class="pt">Code Execution</span></div>
+      <div class="pscroll"><div class="code-lines" id="code-lines"></div></div>
+      <div class="pills" id="pills"></div>
+    </div>
+
+    <!-- MIDDLE: explain + terminal + nav -->
+    <div class="mid-col">
+      <div class="explain">
+        <div class="ex-head">
+          <span class="pt" style="color:var(--text2)">📖 Step</span>
+          <span class="step-badge" id="step-badge">1</span>
+          <span style="margin-left:auto;font-size:10px;color:var(--text3);font-family:var(--mono)" id="prog-lbl"></span>
+        </div>
+        <div class="ex-body">
+          <div class="ex-main" id="ex-main"></div>
+          <div class="mem-row" id="mem-row"></div>
+          <div class="ex-detail" id="ex-detail"></div>
+        </div>
+      </div>
+      <div class="term">
+        <div class="term-bar">
+          <span>● EMU8086 Output</span>
+          <span style="margin-left:auto" id="term-cnt"></span>
+        </div>
+        <div class="term-body" id="term-body"></div>
+      </div>
+      <div class="nav">
+        <button class="nbtn" id="btn-prev" onclick="go(-1)">← Back</button>
+        <div class="prog">
+          <div class="pdots" id="pdots"></div>
+          <div class="plbl" id="plbl"></div>
+        </div>
+        <button class="nbtn primary" id="btn-next" onclick="go(1)">Next →</button>
+        <button class="rst" onclick="cur=0;render()">↺</button>
+      </div>
+    </div>
+
+    <!-- RIGHT: registers + stack -->
+    <div class="right-col">
+      <div class="panel" style="flex-shrink:0">
+        <div class="ph"><div class="dot g"></div><span class="pt">CPU Registers</span></div>
+        <div class="regs" id="regs"></div>
+      </div>
+      <div class="panel" style="flex:1;min-height:0">
+        <div class="ph"><div class="dot a"></div><span class="pt">Stack Memory (LIFO)</span>
+          <span id="sdepth" style="margin-left:auto;font-size:10px;color:var(--text3);font-family:var(--mono)"></span>
+        </div>
+        <div class="sarea" id="sarea"></div>
+      </div>
+    </div>
+
+  </div><!-- end grid -->
+
+  <!-- Glossary strip -->
+  <div class="glossary">
+    <div class="gc"><div class="gc-head"><div class="gc-icon" style="background:rgba(251,191,36,.15)">📞</div><span class="gc-lbl">CALL label</span></div><div class="gc-body">Pushes return addr (SP−2), jumps to label.</div></div>
+    <div class="gc"><div class="gc-head"><div class="gc-icon" style="background:rgba(248,113,113,.15)">↩</div><span class="gc-lbl">RET</span></div><div class="gc-body">Pops return addr into IP (SP+2). Resumes after CALL.</div></div>
+    <div class="gc"><div class="gc-head"><div class="gc-icon" style="background:rgba(99,130,255,.15)">⬇</div><span class="gc-lbl">PUSH reg</span></div><div class="gc-body">SP = SP−2, memory[SP] = reg. Stack grows down.</div></div>
+    <div class="gc"><div class="gc-head"><div class="gc-icon" style="background:rgba(45,212,191,.15)">⬆</div><span class="gc-lbl">POP reg</span></div><div class="gc-body">reg = memory[SP], SP = SP+2. Always reverse PUSH order.</div></div>
+    <div class="gc"><div class="gc-head"><div class="gc-icon" style="background:rgba(52,211,153,.15)">📍</div><span class="gc-lbl">SP register</span></div><div class="gc-body">Always points to top of stack. Must return to base after proc.</div></div>
+    <div class="gc"><div class="gc-head"><div class="gc-icon" style="background:rgba(167,139,250,.15)">🔁</div><span class="gc-lbl">LIFO Rule</span></div><div class="gc-body">Last pushed = first popped. PUSH A,B → POP B,A.</div></div>
+  </div>
+
+</div>
+
+<script>
+var PROCS=[
+{name:"Basic CALL/RET",icon:"📞",title:"Procedure 1 — Basic CALL and RET",desc:"Main loads AX=10, calls my_proc which adds 5 → AX=15, then RET returns. AX=99 confirms return worked.",file:"proc1.asm",
+lines:[
+{t:'<span class="kw">MOV</span> <span class="reg-hl">AX</span>, @DATA &nbsp;<span class="comment">; set up data segment</span>',ind:0,sec:"main",concept:"mov"},
+{t:'<span class="kw">MOV</span> <span class="reg-hl">DS</span>, <span class="reg-hl">AX</span>',ind:0,sec:"main",concept:"mov"},
+{t:'<span class="kw">MOV</span> <span class="reg-hl">AX</span>, <span class="num-hl">10</span> &nbsp;<span class="comment">; AX = 10</span>',ind:0,sec:"main",concept:"mov"},
+{t:'<span class="op-hl">CALL</span> my_proc &nbsp;<span class="comment">; push ret addr, jump to my_proc</span>',ind:0,sec:"main",concept:"call"},
+{t:'<span class="kw">ADD</span> <span class="reg-hl">AX</span>, <span class="num-hl">5</span> &nbsp;<span class="comment">; AX = AX + 5 = 15</span>',ind:1,sec:"my_proc",concept:"add"},
+{t:'<span class="kw">MOV</span> <span class="reg-hl">AH</span>, <span class="num-hl">09h</span> / <span class="kw">LEA</span> <span class="reg-hl">DX</span>, msg1 / <span class="kw">INT</span> <span class="num-hl">21h</span>',ind:1,sec:"my_proc",concept:"mov"},
+{t:'<span class="op-hl">RET</span> &nbsp;<span class="comment">; pop return addr → back to main</span>',ind:1,sec:"my_proc",concept:"ret"},
+{t:'<span class="kw">MOV</span> <span class="reg-hl">AH</span>, <span class="num-hl">09h</span> / <span class="kw">LEA</span> <span class="reg-hl">DX</span>, msg2 / <span class="kw">INT</span> <span class="num-hl">21h</span>',ind:0,sec:"main",concept:"mov"},
+{t:'<span class="kw">MOV</span> <span class="reg-hl">AX</span>, <span class="num-hl">99</span> &nbsp;<span class="comment">; confirms return worked</span>',ind:0,sec:"main",concept:"mov"},
+],
+steps:[
+{c:0,regs:{AX:0,SP:"base"},prev:{},stk:[],out:[],e:"Program starts. Data segment setup. SP at <span class='ok'>base</span> — stack is empty.",detail:"Before using strings, you must point DS to your data segment with MOV AX, @DATA / MOV DS, AX. Without this, INT 21h cannot find your strings.",changes:[]},
+{c:1,regs:{AX:0,SP:"base"},prev:{},stk:[],out:[],e:"<span class='hl'>MOV DS, AX</span> — DS now points to our data. Setup complete.",detail:"AX was loaded with @DATA address; now moved into DS. You cannot load DS directly — must use AX as middleman.",changes:[]},
+{c:2,regs:{AX:10,SP:"base"},prev:{AX:0},stk:[],out:[],e:"<span class='hl'>MOV AX, 10</span> — AX loaded with <span class='ok'>10</span>. Stack still empty, SP unchanged.",detail:"AX (Accumulator) is the most-used register for arithmetic. 16-bit, holds 0–65535.",changes:[{label:"AX",before:"0",after:"10"}]},
+{c:3,regs:{AX:10,SP:"base−2"},prev:{SP:"base"},stk:[{l:"Return address → back to main",t:"addr"}],out:[],e:"<span class='wn'>CALL my_proc</span> — Two things at once:<br>① CPU pushes <span class='ok'>return address</span> onto stack → SP−2<br>② CPU jumps to <span class='hl'>my_proc</span>",detail:"CALL is like bookmarking your page before jumping to another chapter. The bookmark (return address) is on the stack. RET reads it and jumps back. SP-2 because each stack item is 2 bytes (16-bit CPU).",changes:[{label:"SP",before:"base",after:"base−2"},{label:"Stack",before:"empty",after:"+1 item"}]},
+{c:4,regs:{AX:15,SP:"base−2"},prev:{AX:10},stk:[{l:"Return address → back to main",t:"addr"}],out:[],e:"<span class='hl'>ADD AX, 5</span> — Inside <span class='ok'>my_proc</span>. AX = 10 + 5 = <span class='ok'>15</span>. Return address waits safely on stack.",detail:"ADD adds a value to a register. AX = AX + 5. Stack is untouched — the return address is still there.",changes:[{label:"AX",before:"10",after:"15"}]},
+{c:5,regs:{AX:15,SP:"base−2"},prev:{},stk:[{l:"Return address → back to main",t:"addr"}],out:["Inside my_proc: AX modified."],e:"<span class='hl'>INT 21h</span> — Prints confirmation that we are inside my_proc.",detail:"INT 21h with AH=09h prints a string. DX must point to a '$'-terminated string.",changes:[]},
+{c:6,regs:{AX:15,SP:"base"},prev:{SP:"base−2"},stk:[],out:["Inside my_proc: AX modified."],e:"<span class='wn'>RET</span> — ① Pops return address into IP — SP+2<br>② CPU jumps to instruction right after <span class='hl'>CALL my_proc</span>",detail:"RET reverses CALL: reads the top of the stack into the Instruction Pointer (IP), increments SP by 2. CPU now executes the instruction after CALL.",changes:[{label:"SP",before:"base−2",after:"base"},{label:"Stack",before:"1 item",after:"empty"}]},
+{c:7,regs:{AX:15,SP:"base"},prev:{},stk:[],out:["Inside my_proc: AX modified.","Returned to main: CALL worked!"],e:"<span class='hl'>INT 21h</span> — Back in main! Second message prints, confirming RET returned to exactly the right place.",detail:"Executing the instruction immediately after CALL my_proc. RET correctly restored IP to the saved return address.",changes:[]},
+{c:8,regs:{AX:99,SP:"base"},prev:{AX:15},stk:[],out:["Inside my_proc: AX modified.","Returned to main: CALL worked!"],e:"<span class='hl'>MOV AX, 99</span> — Final proof. AX = 99 confirms we're back in main. Stack empty. SP = base. <span class='ok'>Complete!</span>",detail:"AX changed 15 → 99, proving successful return. Stack is empty, SP exactly where it started — perfectly balanced.",changes:[{label:"AX",before:"15",after:"99"}]},
+]},
+{name:"PUSH / POP",icon:"💾",title:"Procedure 2 — Saving & Restoring Registers",desc:"Save BX with PUSH before using it. Restore with POP before RET. Caller sees BX=0 unchanged. AX=30.",file:"proc2.asm",
+lines:[
+{t:'<span class="kw">MOV</span> <span class="reg-hl">AX</span>, @DATA / <span class="kw">MOV</span> <span class="reg-hl">DS</span>, <span class="reg-hl">AX</span>',ind:0,sec:"main",concept:"mov"},
+{t:'<span class="kw">MOV</span> <span class="reg-hl">AX</span>, <span class="num-hl">20</span> &nbsp;<span class="comment">; AX = 20</span>',ind:0,sec:"main",concept:"mov"},
+{t:'<span class="kw">MOV</span> <span class="reg-hl">BX</span>, <span class="num-hl">0</span> &nbsp;<span class="comment">; BX = 0 (should survive the call)</span>',ind:0,sec:"main",concept:"mov"},
+{t:'<span class="op-hl">CALL</span> add_ten &nbsp;<span class="comment">; jump to procedure</span>',ind:0,sec:"main",concept:"call"},
+{t:'<span class="op-hl">PUSH</span> <span class="reg-hl">BX</span> &nbsp;<span class="comment">; save BX on stack before changing it</span>',ind:1,sec:"add_ten",concept:"push"},
+{t:'<span class="kw">MOV</span> <span class="reg-hl">BX</span>, <span class="num-hl">10</span> &nbsp;<span class="comment">; BX = 10 (we change BX here)</span>',ind:1,sec:"add_ten",concept:"mov"},
+{t:'<span class="kw">ADD</span> <span class="reg-hl">AX</span>, <span class="reg-hl">BX</span> &nbsp;<span class="comment">; AX = 20 + 10 = 30</span>',ind:1,sec:"add_ten",concept:"add"},
+{t:'<span class="kw">INT</span> <span class="num-hl">21h</span> &nbsp;<span class="comment">; print message</span>',ind:1,sec:"add_ten",concept:"mov"},
+{t:'<span class="op-hl">POP</span> <span class="reg-hl">BX</span> &nbsp;<span class="comment">; restore BX = 0 from stack</span>',ind:1,sec:"add_ten",concept:"pop"},
+{t:'<span class="op-hl">RET</span> &nbsp;<span class="comment">; return to main</span>',ind:1,sec:"add_ten",concept:"ret"},
+],
+steps:[
+{c:0,regs:{AX:0,BX:0,SP:"base"},prev:{},stk:[],out:[],e:"Data segment setup. AX and BX start at 0.",detail:"",changes:[]},
+{c:1,regs:{AX:20,BX:0,SP:"base"},prev:{AX:0},stk:[],out:[],e:"<span class='hl'>MOV AX, 20</span> — AX = 20. This is the value we'll add 10 to.",detail:"AX will hold our result.",changes:[{label:"AX",before:"0",after:"20"}]},
+{c:2,regs:{AX:20,BX:0,SP:"base"},prev:{},stk:[],out:[],e:"<span class='hl'>MOV BX, 0</span> — BX set to 0. We want BX to still be <span class='ok'>0</span> when the procedure returns. Without PUSH/POP, the procedure would corrupt BX.",detail:"Main uses BX for something important. If the procedure corrupts it without saving, main breaks. Solution: PUSH/POP.",changes:[]},
+{c:3,regs:{AX:20,BX:0,SP:"base−2"},prev:{SP:"base"},stk:[{l:"Return address → back to main",t:"addr"}],out:[],e:"<span class='wn'>CALL add_ten</span> — Return address pushed (SP−2). CPU jumps into add_ten.",detail:"Same as Proc 1 — CALL always pushes the return address first.",changes:[{label:"SP",before:"base",after:"base−2"}]},
+{c:4,regs:{AX:20,BX:0,SP:"base−4"},prev:{SP:"base−2"},stk:[{l:"BX saved = 0  ← our saved value",t:"reg"},{l:"Return address → back to main",t:"addr"}],out:[],e:"<span class='wn'>PUSH BX</span> — BX's value (<span class='ok'>0</span>) pushed onto stack. SP−2. Stack has <span class='ok'>2 items</span>.<br><br>Think of it as putting BX in a safe before changing it.",detail:"PUSH BX: SP = SP-2, then memory[SP] = BX. Value 0 stored at address SP. We can now freely change BX.",changes:[{label:"SP",before:"base−2",after:"base−4"},{label:"Stack",before:"1 item",after:"2 items"}]},
+{c:5,regs:{AX:20,BX:10,SP:"base−4"},prev:{BX:0},stk:[{l:"BX saved = 0",t:"reg"},{l:"Return address → back to main",t:"addr"}],out:[],e:"<span class='hl'>MOV BX, 10</span> — BX changed to 10. No problem! Original value (0) is safely on the stack.",detail:"We freely change BX here. Stack holds its old value until we POP.",changes:[{label:"BX",before:"0",after:"10"}]},
+{c:6,regs:{AX:30,BX:10,SP:"base−4"},prev:{AX:20},stk:[{l:"BX saved = 0",t:"reg"},{l:"Return address → back to main",t:"addr"}],out:[],e:"<span class='hl'>ADD AX, BX</span> — AX = 20 + 10 = <span class='ok'>30</span>. Result computed!",detail:"",changes:[{label:"AX",before:"20",after:"30"}]},
+{c:7,regs:{AX:30,BX:10,SP:"base−4"},prev:{},stk:[{l:"BX saved = 0",t:"reg"},{l:"Return address → back to main",t:"addr"}],out:["add_ten: AX = AX + 10."],e:"<span class='hl'>INT 21h</span> — Prints message from inside the procedure.",detail:"",changes:[]},
+{c:8,regs:{AX:30,BX:0,SP:"base−2"},prev:{BX:10,SP:"base−4"},stk:[{l:"Return address → back to main",t:"addr"}],out:["add_ten: AX = AX + 10."],e:"<span class='wn'>POP BX</span> — Saved value (<span class='ok'>0</span>) popped back into BX. SP+2. BX is restored!",detail:"POP BX: BX = memory[SP], then SP = SP + 2. We recover original BX. Stack now only has the return address.",changes:[{label:"BX",before:"10",after:"0"},{label:"SP",before:"base−4",after:"base−2"}]},
+{c:9,regs:{AX:30,BX:0,SP:"base"},prev:{SP:"base−2"},stk:[],out:["add_ten: AX = AX + 10."],e:"<span class='wn'>RET</span> — Return address popped. SP = base. <span class='ok'>AX=30, BX=0</span> — both correct! Caller never knew BX was temporarily changed.",detail:"1 CALL + 1 PUSH = 1 POP + 1 RET. SP: base → −2 → −4 → −2 → base. Perfectly balanced.",changes:[{label:"SP",before:"base−2",after:"base"},{label:"Stack",before:"1 item",after:"empty"}]},
+]},
+{name:"Register Params",icon:"📨",title:"Procedure 3 — Passing Parameters via Registers",desc:"Load inputs into AX and BX before CALL. Inside add_nums: ADD AX, BX. After RET, AX=13 is the answer.",file:"proc3.asm",
+lines:[
+{t:'<span class="kw">MOV</span> <span class="reg-hl">AX</span>, @DATA / <span class="kw">MOV</span> <span class="reg-hl">DS</span>, <span class="reg-hl">AX</span>',ind:0,sec:"main",concept:"mov"},
+{t:'<span class="kw">MOV</span> <span class="reg-hl">AX</span>, <span class="num-hl">8</span> &nbsp;<span class="comment">; first parameter → AX</span>',ind:0,sec:"main",concept:"mov"},
+{t:'<span class="kw">MOV</span> <span class="reg-hl">BX</span>, <span class="num-hl">5</span> &nbsp;<span class="comment">; second parameter → BX</span>',ind:0,sec:"main",concept:"mov"},
+{t:'<span class="op-hl">CALL</span> add_nums &nbsp;<span class="comment">; AX=8, BX=5 are the inputs</span>',ind:0,sec:"main",concept:"call"},
+{t:'<span class="kw">ADD</span> <span class="reg-hl">AX</span>, <span class="reg-hl">BX</span> &nbsp;<span class="comment">; AX = 8 + 5 = 13 (result in AX)</span>',ind:1,sec:"add_nums",concept:"add"},
+{t:'<span class="kw">INT</span> <span class="num-hl">21h</span> &nbsp;<span class="comment">; print message</span>',ind:1,sec:"add_nums",concept:"mov"},
+{t:'<span class="op-hl">RET</span> &nbsp;<span class="comment">; return AX=13 to main</span>',ind:1,sec:"add_nums",concept:"ret"},
+],
+steps:[
+{c:0,regs:{AX:0,BX:0,SP:"base"},prev:{},stk:[],out:[],e:"Data segment setup. AX and BX start at 0.",detail:"",changes:[]},
+{c:1,regs:{AX:8,BX:0,SP:"base"},prev:{AX:0},stk:[],out:[],e:"<span class='hl'>MOV AX, 8</span> — First input parameter loaded into AX. Registers are how we pass values to procedures.",detail:"No 'function arguments' in assembly like C/Python. Load values into specific registers before CALL; procedure reads them from those registers.",changes:[{label:"AX",before:"0",after:"8"}]},
+{c:2,regs:{AX:8,BX:5,SP:"base"},prev:{BX:0},stk:[],out:[],e:"<span class='hl'>MOV BX, 5</span> — Second input parameter loaded into BX. Both inputs ready before CALL.",detail:"AX = first parameter, BX = second parameter. Procedure reads these values from registers.",changes:[{label:"BX",before:"0",after:"5"}]},
+{c:3,regs:{AX:8,BX:5,SP:"base−2"},prev:{SP:"base"},stk:[{l:"Return address → back to main",t:"addr"}],out:[],e:"<span class='wn'>CALL add_nums</span> — Return address pushed, CPU jumps. <span class='ok'>AX=8 and BX=5</span> travel with us — registers keep their values across a CALL.",detail:"CALL only saves the return address. It does NOT save register values. So AX=8 and BX=5 are accessible inside the procedure.",changes:[{label:"SP",before:"base",after:"base−2"}]},
+{c:4,regs:{AX:13,BX:5,SP:"base−2"},prev:{AX:8},stk:[{l:"Return address → back to main",t:"addr"}],out:[],e:"<span class='hl'>ADD AX, BX</span> — AX = 8 + 5 = <span class='ok'>13</span>. Result placed in AX.",detail:"Procedure reads inputs from AX and BX. Result stored back in AX. AX is both input and output here — a common convention.",changes:[{label:"AX",before:"8",after:"13"}]},
+{c:5,regs:{AX:13,BX:5,SP:"base−2"},prev:{},stk:[{l:"Return address → back to main",t:"addr"}],out:["add_nums: result in AX."],e:"<span class='hl'>INT 21h</span> — Prints message.",detail:"",changes:[]},
+{c:6,regs:{AX:13,BX:5,SP:"base"},prev:{SP:"base−2"},stk:[],out:["add_nums: result in AX."],e:"<span class='wn'>RET</span> — Returns to main. <span class='ok'>AX = 13</span> is the answer. Main reads AX after CALL to get the result.",detail:"Convention: AX = return value. After RET, main reads AX for the answer — similar to how functions return values in higher-level languages.",changes:[{label:"SP",before:"base−2",after:"base"}]},
+]},
+{name:"Multi PUSH/POP",icon:"🗂",title:"Procedure 4 — Multiple PUSH and POP",desc:"PUSH BX then PUSH CX at start. POP CX first then POP BX at end (LIFO). AX=18, BX and CX preserved.",file:"proc4.asm",
+lines:[
+{t:'<span class="kw">MOV</span> <span class="reg-hl">AX</span>, @DATA / <span class="kw">MOV</span> <span class="reg-hl">DS</span>, <span class="reg-hl">AX</span>',ind:0,sec:"main",concept:"mov"},
+{t:'<span class="kw">MOV</span> <span class="reg-hl">AX</span>, <span class="num-hl">5</span> / <span class="kw">MOV</span> <span class="reg-hl">BX</span>, <span class="num-hl">10</span> / <span class="kw">MOV</span> <span class="reg-hl">CX</span>, <span class="num-hl">3</span>',ind:0,sec:"main",concept:"mov"},
+{t:'<span class="op-hl">CALL</span> compute &nbsp;<span class="comment">; enter procedure</span>',ind:0,sec:"main",concept:"call"},
+{t:'<span class="op-hl">PUSH</span> <span class="reg-hl">BX</span> &nbsp;<span class="comment">; save BX=10 (pushed first)</span>',ind:1,sec:"compute",concept:"push"},
+{t:'<span class="op-hl">PUSH</span> <span class="reg-hl">CX</span> &nbsp;<span class="comment">; save CX=3 (pushed second, on TOP)</span>',ind:1,sec:"compute",concept:"push"},
+{t:'<span class="kw">ADD</span> <span class="reg-hl">AX</span>, <span class="reg-hl">BX</span> &nbsp;<span class="comment">; AX = 5 + 10 = 15</span>',ind:1,sec:"compute",concept:"add"},
+{t:'<span class="kw">ADD</span> <span class="reg-hl">AX</span>, <span class="reg-hl">CX</span> &nbsp;<span class="comment">; AX = 15 + 3 = 18</span>',ind:1,sec:"compute",concept:"add"},
+{t:'<span class="kw">INT</span> <span class="num-hl">21h</span> &nbsp;<span class="comment">; print message</span>',ind:1,sec:"compute",concept:"mov"},
+{t:'<span class="op-hl">POP</span> <span class="reg-hl">CX</span> &nbsp;<span class="comment">; CX popped FIRST (was last pushed)</span>',ind:1,sec:"compute",concept:"pop"},
+{t:'<span class="op-hl">POP</span> <span class="reg-hl">BX</span> &nbsp;<span class="comment">; BX popped second</span>',ind:1,sec:"compute",concept:"pop"},
+{t:'<span class="op-hl">RET</span> &nbsp;<span class="comment">; AX=18, BX=10, CX=3 all intact</span>',ind:1,sec:"compute",concept:"ret"},
+],
+steps:[
+{c:0,regs:{AX:0,BX:0,CX:0,SP:"base"},prev:{},stk:[],out:[],e:"Data segment setup. All registers start at 0.",detail:"",changes:[]},
+{c:1,regs:{AX:5,BX:10,CX:3,SP:"base"},prev:{AX:0,BX:0,CX:0},stk:[],out:[],e:"<span class='hl'>MOV AX,5 / MOV BX,10 / MOV CX,3</span> — Three registers loaded. AX=5 will hold result; BX=10 and CX=3 are the addends.",detail:"",changes:[{label:"AX",before:"0",after:"5"},{label:"BX",before:"0",after:"10"},{label:"CX",before:"0",after:"3"}]},
+{c:2,regs:{AX:5,BX:10,CX:3,SP:"base−2"},prev:{SP:"base"},stk:[{l:"Return address → back to main",t:"addr"}],out:[],e:"<span class='wn'>CALL compute</span> — Return address pushed. SP−2. Jump to compute.",detail:"",changes:[{label:"SP",before:"base",after:"base−2"}]},
+{c:3,regs:{AX:5,BX:10,CX:3,SP:"base−4"},prev:{SP:"base−2"},stk:[{l:"BX saved = 10",t:"reg"},{l:"Return address → back to main",t:"addr"}],out:[],e:"<span class='wn'>PUSH BX</span> — BX (10) pushed onto stack. SP−2. Stack: 2 items. BX pushed <span class='danger'>first</span>.",detail:"BX pushed first means it's below CX on the stack. When popping later, CX must come out first (LIFO).",changes:[{label:"SP",before:"base−2",after:"base−4"},{label:"Stack",before:"1 item",after:"2 items"}]},
+{c:4,regs:{AX:5,BX:10,CX:3,SP:"base−6"},prev:{SP:"base−4"},stk:[{l:"CX saved = 3  ← TOP",t:"reg"},{l:"BX saved = 10",t:"reg"},{l:"Return address → back to main",t:"addr"}],out:[],e:"<span class='wn'>PUSH CX</span> — CX (3) pushed on TOP. SP−2. Stack: <span class='ok'>3 items</span>.<br><br>⚠️ <span class='danger'>LIFO:</span> CX last in → must be first out.",detail:"Stack top→bottom: CX=3 | BX=10 | return_addr. When POPping, we get CX first, then BX. If we tried POP BX first, we'd get CX's value instead — wrong!",changes:[{label:"SP",before:"base−4",after:"base−6"},{label:"Stack",before:"2 items",after:"3 items"}]},
+{c:5,regs:{AX:15,BX:10,CX:3,SP:"base−6"},prev:{AX:5},stk:[{l:"CX saved = 3",t:"reg"},{l:"BX saved = 10",t:"reg"},{l:"Return address → back to main",t:"addr"}],out:[],e:"<span class='hl'>ADD AX, BX</span> — AX = 5 + 10 = <span class='ok'>15</span>.",detail:"",changes:[{label:"AX",before:"5",after:"15"}]},
+{c:6,regs:{AX:18,BX:10,CX:3,SP:"base−6"},prev:{AX:15},stk:[{l:"CX saved = 3",t:"reg"},{l:"BX saved = 10",t:"reg"},{l:"Return address → back to main",t:"addr"}],out:[],e:"<span class='hl'>ADD AX, CX</span> — AX = 15 + 3 = <span class='ok'>18</span>. Final result ready!",detail:"",changes:[{label:"AX",before:"15",after:"18"}]},
+{c:7,regs:{AX:18,BX:10,CX:3,SP:"base−6"},prev:{},stk:[{l:"CX saved = 3",t:"reg"},{l:"BX saved = 10",t:"reg"},{l:"Return address → back to main",t:"addr"}],out:["compute: AX = AX+BX+CX."],e:"<span class='hl'>INT 21h</span> — Prints message.",detail:"",changes:[]},
+{c:8,regs:{AX:18,BX:10,CX:3,SP:"base−4"},prev:{SP:"base−6"},stk:[{l:"BX saved = 10",t:"reg"},{l:"Return address → back to main",t:"addr"}],out:["compute: AX = AX+BX+CX."],e:"<span class='wn'>POP CX</span> — CX was last pushed, so popped <span class='ok'>first</span> (LIFO). CX = <span class='ok'>3</span> restored. SP+2.",detail:"POP CX: CX = memory[SP] = 3, then SP = SP + 2. Stack: 2 items (BX and return addr).",changes:[{label:"SP",before:"base−6",after:"base−4"},{label:"Stack",before:"3 items",after:"2 items"}]},
+{c:9,regs:{AX:18,BX:10,CX:3,SP:"base−2"},prev:{SP:"base−4"},stk:[{l:"Return address → back to main",t:"addr"}],out:["compute: AX = AX+BX+CX."],e:"<span class='wn'>POP BX</span> — BX was pushed first, popped <span class='ok'>second</span>. BX = <span class='ok'>10</span> restored. SP+2.",detail:"POP BX: BX = memory[SP] = 10, then SP = SP + 2. Reverse order ensures each register gets its own original value.",changes:[{label:"SP",before:"base−4",after:"base−2"},{label:"Stack",before:"2 items",after:"1 item"}]},
+{c:10,regs:{AX:18,BX:10,CX:3,SP:"base"},prev:{SP:"base−2"},stk:[],out:["compute: AX = AX+BX+CX."],e:"<span class='wn'>RET</span> — SP = base. <span class='ok'>AX=18, BX=10, CX=3</span> — all correct! 3 PUSHes + 3 POPs + CALL/RET = stack perfectly balanced.",detail:"Push order: BX, CX. Pop order: CX, BX. Exactly reversed. Iron rule of assembly procedures.",changes:[{label:"SP",before:"base−2",after:"base"}]},
+]},
+{name:"Nested Calls",icon:"🔁",title:"Procedure 5 — Nested Procedure Calls",desc:"Main→outer→inner. Stack holds TWO return addresses. Each RET pops the TOP. AX = 0+20+10+5 = 35.",file:"proc5.asm",
+lines:[
+{t:'<span class="kw">MOV</span> <span class="reg-hl">AX</span>, @DATA / <span class="kw">MOV</span> <span class="reg-hl">DS</span>, <span class="reg-hl">AX</span>',ind:0,sec:"main",concept:"mov"},
+{t:'<span class="kw">MOV</span> <span class="reg-hl">AX</span>, <span class="num-hl">0</span> &nbsp;<span class="comment">; AX starts at 0</span>',ind:0,sec:"main",concept:"mov"},
+{t:'<span class="op-hl">CALL</span> outer &nbsp;<span class="comment">; ① push ret→main, jump to outer</span>',ind:0,sec:"main",concept:"call"},
+{t:'<span class="kw">ADD</span> <span class="reg-hl">AX</span>, <span class="num-hl">20</span> &nbsp;<span class="comment">; AX = 0 + 20 = 20</span>',ind:1,sec:"outer",concept:"add"},
+{t:'<span class="op-hl">CALL</span> inner &nbsp;<span class="comment">; ② push ret→outer, jump to inner</span>',ind:1,sec:"outer",concept:"call"},
+{t:'<span class="kw">ADD</span> <span class="reg-hl">AX</span>, <span class="num-hl">10</span> &nbsp;<span class="comment">; AX = 20 + 10 = 30</span>',ind:2,sec:"inner",concept:"add"},
+{t:'<span class="kw">INT</span> <span class="num-hl">21h</span> &nbsp;<span class="comment">; inner: print message</span>',ind:2,sec:"inner",concept:"mov"},
+{t:'<span class="op-hl">RET</span> &nbsp;<span class="comment">; pops ② ret→outer, goes back to outer</span>',ind:2,sec:"inner",concept:"ret"},
+{t:'<span class="kw">ADD</span> <span class="reg-hl">AX</span>, <span class="num-hl">5</span> &nbsp;<span class="comment">; AX = 30 + 5 = 35</span>',ind:1,sec:"outer",concept:"add"},
+{t:'<span class="kw">INT</span> <span class="num-hl">21h</span> &nbsp;<span class="comment">; outer: print message</span>',ind:1,sec:"outer",concept:"mov"},
+{t:'<span class="op-hl">RET</span> &nbsp;<span class="comment">; pops ① ret→main, goes back to main</span>',ind:1,sec:"outer",concept:"ret"},
+{t:'<span class="kw">INT</span> <span class="num-hl">21h</span> &nbsp;<span class="comment">; main: print final message</span>',ind:0,sec:"main",concept:"mov"},
+],
+steps:[
+{c:0,regs:{AX:0,SP:"base"},prev:{},stk:[],out:[],e:"Data segment setup. Stack empty.",detail:"",changes:[]},
+{c:1,regs:{AX:0,SP:"base"},prev:{},stk:[],out:[],e:"<span class='hl'>MOV AX, 0</span> — AX = 0. We're in main.",detail:"",changes:[]},
+{c:2,regs:{AX:0,SP:"base−2"},prev:{SP:"base"},stk:[{l:"① Return to MAIN",t:"addr"}],out:[],e:"<span class='wn'>CALL outer</span> — <span class='ok'>Return address ①</span> pushed. SP−2. Jumps to outer. Stack: 1 entry.",detail:"When outer eventually hits RET, it pops this address and jumps back to main.",changes:[{label:"SP",before:"base",after:"base−2"}]},
+{c:3,regs:{AX:20,SP:"base−2"},prev:{AX:0},stk:[{l:"① Return to MAIN",t:"addr"}],out:[],e:"<span class='hl'>ADD AX, 20</span> (inside outer) — AX = 0 + 20 = <span class='ok'>20</span>.",detail:"",changes:[{label:"AX",before:"0",after:"20"}]},
+{c:4,regs:{AX:20,SP:"base−4"},prev:{SP:"base−2"},stk:[{l:"② Return to OUTER",t:"addr"},{l:"① Return to MAIN",t:"addr"}],out:[],e:"<span class='wn'>CALL inner</span> — <span class='ok'>Return address ②</span> pushed on TOP. SP−2. Stack: <span class='ok'>TWO addresses</span>! Jumps to inner.",detail:"Key insight: each CALL pushes its own return address. TOP entry (②) was last in, so it will be popped first by inner's RET — sending execution back to outer, NOT main.",changes:[{label:"SP",before:"base−2",after:"base−4"},{label:"Stack",before:"1 item",after:"2 items"}]},
+{c:5,regs:{AX:30,SP:"base−4"},prev:{AX:20},stk:[{l:"② Return to OUTER",t:"addr"},{l:"① Return to MAIN",t:"addr"}],out:[],e:"<span class='hl'>ADD AX, 10</span> (inside inner) — AX = 20 + 10 = <span class='ok'>30</span>. Both return addresses safe on stack.",detail:"",changes:[{label:"AX",before:"20",after:"30"}]},
+{c:6,regs:{AX:30,SP:"base−4"},prev:{},stk:[{l:"② Return to OUTER",t:"addr"},{l:"① Return to MAIN",t:"addr"}],out:[" Inside inner: AX += 10"],e:"<span class='hl'>INT 21h</span> — inner prints its message.",detail:"",changes:[]},
+{c:7,regs:{AX:30,SP:"base−2"},prev:{SP:"base−4"},stk:[{l:"① Return to MAIN",t:"addr"}],out:[" Inside inner: AX += 10"],e:"<span class='wn'>RET</span> (inner) — Pops <span class='ok'>② Return-to-OUTER</span> from TOP. SP+2. Jumps back to <span class='ok'>outer</span> — NOT main!",detail:"RET always pops the TOP. The top was ② (return to outer). Address ① is untouched — waiting for outer's RET.",changes:[{label:"SP",before:"base−4",after:"base−2"},{label:"Stack",before:"2 items",after:"1 item"}]},
+{c:8,regs:{AX:35,SP:"base−2"},prev:{AX:30},stk:[{l:"① Return to MAIN",t:"addr"}],out:[" Inside inner: AX += 10"],e:"<span class='hl'>ADD AX, 5</span> (back in outer) — AX = 30 + 5 = <span class='ok'>35</span>.",detail:"",changes:[{label:"AX",before:"30",after:"35"}]},
+{c:9,regs:{AX:35,SP:"base−2"},prev:{},stk:[{l:"① Return to MAIN",t:"addr"}],out:[" Inside inner: AX += 10"," Inside outer: AX += 20 then 5"],e:"<span class='hl'>INT 21h</span> — outer prints its message.",detail:"",changes:[]},
+{c:10,regs:{AX:35,SP:"base"},prev:{SP:"base−2"},stk:[],out:[" Inside inner: AX += 10"," Inside outer: AX += 20 then 5"],e:"<span class='wn'>RET</span> (outer) — Pops <span class='ok'>① Return-to-MAIN</span>. SP = base. Stack empty. Jumps back to <span class='ok'>main</span>.",detail:"outer's RET pops address ① and goes to main. Stack completely empty. Both procedure calls unwound perfectly.",changes:[{label:"SP",before:"base−2",after:"base"}]},
+{c:11,regs:{AX:35,SP:"base"},prev:{},stk:[],out:[" Inside inner: AX += 10"," Inside outer: AX += 20 then 5","Back in main. AX = 35"],e:"<span class='hl'>INT 21h</span> — main prints final message. <span class='ok'>AX = 35</span> confirmed. Stack empty. Nested calls worked perfectly!",detail:"AX went 0 → 20 → 30 → 35. Each step in a different procedure. Stack correctly managed all return addresses, unwinding perfectly.",changes:[]},
+]},
+];
+
+var pi=0,cur=0;
+
+function go(d){var s=PROCS[pi].steps;if(d>0&&cur<s.length-1)cur++;else if(d<0&&cur>0)cur--;render();}
+function setP(i){pi=i;cur=0;render();}
+
+function secColor(s){if(s==="main")return"var(--text3)";if(s==="outer")return"#2563eb";if(s==="inner")return"#7c3aed";return"var(--accent)";}
+
+function render(){
+  var p=PROCS[pi],s=p.steps[cur];
+
+  // Tabs
+  var th='';
+  for(var i=0;i<PROCS.length;i++){
+    var on=i===pi;
+    th+='<div class="tab '+(on?'on':'')+'" onclick="setP('+i+')">'+'<span class="n">'+(i+1)+'</span>'+PROCS[i].icon+' '+PROCS[i].name+'</div>';
+  }
+  document.getElementById('tabs').innerHTML=th;
+
+  // Banner
+  document.getElementById('bi').textContent=p.icon;
+  document.getElementById('btitle').textContent=p.title;
+  document.getElementById('bdesc').textContent=p.desc;
+  document.getElementById('bfile').textContent=p.file;
+
+  // Code
+  var prevSec=null,ch='';
+  for(var i=0;i<p.lines.length;i++){
+    var ln=p.lines[i],isCur=i===s.c,isDone=i<s.c;
+    var ind=ln.ind===1?' indent1':ln.ind===2?' indent2':'';
+    if(ln.sec!==prevSec){
+      ch+='<div class="section-label" style="color:'+secColor(ln.sec)+'">'+ln.sec+' PROC</div>';
+      prevSec=ln.sec;
+    }
+    ch+='<div class="cl'+ind+(isCur?' cur':'')+(isDone?' done':'')+'">'
+      +'<div class="ln">'+(i+1)+'</div>'
+      +'<div class="lb">'+(isCur?'<span class="arrow">▶</span>':'')+ln.t+'</div></div>';
+  }
+  document.getElementById('code-lines').innerHTML=ch;
+
+  // Scroll current line into view
+  setTimeout(function(){var cur_el=document.querySelector('.cl.cur');if(cur_el)cur_el.scrollIntoView({block:'nearest',behavior:'smooth'});},50);
+
+  // Pills
+  var concepts={};
+  for(var i=0;i<p.lines.length;i++)concepts[p.lines[i].concept]=true;
+  var ph='',cmap={call:'CALL',ret:'RET',push:'PUSH',pop:'POP',add:'ADD/SUB',mov:'MOV/LEA'};
+  for(var k in cmap){if(concepts[k])ph+='<span class="cpill '+k+'">'+cmap[k]+'</span>';}
+  document.getElementById('pills').innerHTML=ph;
+
+  // Step badge
+  document.getElementById('step-badge').textContent='Step '+(cur+1)+' / '+p.steps.length;
+
+  // Explanation
+  document.getElementById('ex-main').innerHTML=s.e;
+  var det=document.getElementById('ex-detail');
+  if(s.detail){det.innerHTML='💡 '+s.detail;det.classList.add('show');}
+  else{det.classList.remove('show');det.innerHTML='';}
+
+  // Mem change pills
+  var mc='';
+  for(var i=0;i<s.changes.length;i++){var c=s.changes[i];mc+='<div class="mpill"><span class="lbl">'+c.label+'</span><span class="bef">'+c.before+'</span><span class="arr">→</span><span class="aft">'+c.after+'</span></div>';}
+  document.getElementById('mem-row').innerHTML=mc;
+
+  // Terminal
+  var tb='';
+  if(s.out.length===0)tb='<div class="term-empty"><span class="term-prompt">C:\\&gt;</span> (no output yet)</div>';
+  else for(var i=0;i<s.out.length;i++)tb+='<div class="term-line"><span class="term-prompt">C:\\&gt;</span>'+s.out[i]+'</div>';
+  document.getElementById('term-body').innerHTML=tb;
+  document.getElementById('term-cnt').textContent=s.out.length>0?s.out.length+' line'+(s.out.length>1?'s':''):'';
+
+  // Registers
+  var rh='',rk=Object.keys(s.regs);
+  for(var i=0;i<rk.length;i++){
+    var k=rk[i],v=s.regs[k],chd=s.prev&&s.prev[k]!==undefined;
+    if(k==='SP'){
+      rh+='<div class="rc sp-card'+(chd?' changed':'')+'"><div class="rn">SP — Stack Pointer</div>'
+        +'<div class="rv sp-v'+(chd?' changed':'')+'">'+(chd?'<span style="text-decoration:line-through;color:var(--text3);font-size:10px">'+s.prev[k]+'</span> → ':'')+v+'</div>'
+        +'<div class="sp-bar"><div class="sp-fill" style="width:'+(v==='base'?0:v.includes('−6')?75:v.includes('−4')?50:25)+'%"></div></div>'
+        +'<div class="rsub">Grows down on PUSH/CALL, shrinks up on POP/RET</div></div>';
+    }else{
+      rh+='<div class="rc'+(chd?' changed':'')+'"><div class="rn">'+k+'</div>'
+        +'<div class="rv">'+v+'</div>'
+        +(chd?'<div class="rsub">was: '+s.prev[k]+'</div>':'')+'</div>';
+    }
+  }
+  document.getElementById('regs').innerHTML=rh;
+
+  // Stack
+  var depth=s.stk.length;
+  document.getElementById('sdepth').textContent=depth>0?depth+' item'+(depth>1?'s':''):'empty';
+  var sh='';
+  if(depth===0){
+    sh='<div class="s-empty"><div class="icon">📭</div><div class="txt">Stack is empty</div><div class="txt" style="font-size:9px">SP = base</div></div>';
+  }else{
+    sh='<div class="sp-ptr"><span class="sp-arr">▶ SP</span><span class="sp-txt">points to top of stack</span><span class="sp-dep">'+depth+' item'+(depth>1?'s':'')+'</span></div>';
+    for(var i=0;i<s.stk.length;i++){
+      var en=s.stk[i];
+      sh+='<div class="se '+(en.t==='addr'?'addr':'reg-s')+'">'
+        +'<div class="se-icon">'+(en.t==='addr'?'🔖':'💾')+'</div>'
+        +'<div class="se-txt">'+en.l+'</div>'
+        +(i===0?'<span class="top-b">TOP ← SP</span>':'')+'</div>';
+    }
+  }
+  sh+='<div class="s-base"><div class="s-base-txt">▬▬ stack base ▬▬</div></div>';
+  document.getElementById('sarea').innerHTML=sh;
+
+  // Progress
+  var dh='';
+  for(var i=0;i<p.steps.length;i++)dh+='<div class="pdot'+(i<cur?' done':i===cur?' cur':'')+'" onclick="cur='+i+';render()"></div>';
+  document.getElementById('pdots').innerHTML=dh;
+  document.getElementById('plbl').textContent='Step '+(cur+1)+' of '+p.steps.length;
+  document.getElementById('prog-lbl').textContent=(cur+1)+'/'+p.steps.length;
+
+  // Nav
+  document.getElementById('btn-prev').disabled=cur===0;
+  document.getElementById('btn-next').disabled=cur===p.steps.length-1;
+}
+
+document.addEventListener('keydown',function(e){
+  if(e.key==='ArrowRight'||e.key===' '){e.preventDefault();go(1);}
+  if(e.key==='ArrowLeft'){e.preventDefault();go(-1);}
+  if(e.key==='r'||e.key==='R'){cur=0;render();}
+});
+
+render();
+</script>
+</body>
+</html>
